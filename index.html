@@ -1125,6 +1125,39 @@ function closePanel(id) {
   document.getElementById('tabCal').classList.add('active');
 }
 
+// ━━━ 캘린더 좌우 스와이프 (이전/다음달) ━━━━━━━━━
+function initCalendarSwipe() {
+  const el = document.getElementById('calGrid');
+  let startX = 0, startY = 0, moved = false;
+
+  el.addEventListener('touchstart', e => {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    moved  = false;
+  }, { passive: true });
+
+  el.addEventListener('touchmove', e => {
+    const dx = Math.abs(e.touches[0].clientX - startX);
+    const dy = Math.abs(e.touches[0].clientY - startY);
+    if (dx > 10 && dx > dy) moved = true;
+  }, { passive: true });
+
+  el.addEventListener('touchend', e => {
+    if (!moved) return;
+    const dx = e.changedTouches[0].clientX - startX;
+    const dy = Math.abs(e.changedTouches[0].clientY - startY);
+    if (Math.abs(dx) < 50 || dy > 60) return;
+    if (dx < 0) {
+      // 왼쪽 스와이프 → 다음달
+      if (++currentMonth > 12) { currentMonth = 1; currentYear++; }
+    } else {
+      // 오른쪽 스와이프 → 이전달
+      if (--currentMonth < 1) { currentMonth = 12; currentYear--; }
+    }
+    renderCalendar();
+  }, { passive: true });
+}
+
 // ━━━ 스와이프로 패널 닫기 ━━━━━━━━━━━━━━━━━━━━━
 function initSwipe(panelId) {
   const el = document.getElementById(panelId);
@@ -1546,6 +1579,7 @@ function initApp() {
   initSwipe('todayPanel');
   initSwipe('listPanel');
   initSwipe('settingsPanel');
+  initCalendarSwipe();
 }
 
 // Firebase SDK 로드 후 앱 시작
