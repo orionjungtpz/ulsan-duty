@@ -636,7 +636,25 @@ header {
 <input type="file" id="photoInput" accept="image/*" style="display:none" onchange="handlePhotoUpload(event)">
 <input type="file" id="importFile" accept=".json" style="display:none" onchange="handleImport(event)">
 
-<script>
+<script type="module">
+// ━━━ Firebase SDK ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+import { initializeApp }       from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, onValue, remove }
+                                from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey:            "AIzaSyCpaIMH1SSAJSfk_1O69A7m7u2ZtesdtEg",
+  authDomain:        "ulsan-duty.firebaseapp.com",
+  databaseURL:       "https://ulsan-duty-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "ulsan-duty",
+  storageBucket:     "ulsan-duty.firebasestorage.app",
+  messagingSenderId: "434652610615",
+  appId:             "1:434652610615:web:fb610fe2638e6ef088bfb2"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const db          = getDatabase(firebaseApp);
+
 // ━━━ 상수 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const MEMBERS = [
   { id:'han_sh',  name:'한승호', short:'승호' },
@@ -693,15 +711,32 @@ let selectedDutyType = null;
 let editingDate      = null;
 let photoTargetId    = null;
 
-// ━━━ 스토리지 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function loadData() {
-  try { allData = JSON.parse(localStorage.getItem('dp_all')    || '{}'); } catch { allData  = {}; }
-  try { photos  = JSON.parse(localStorage.getItem('dp_photos') || '{}'); } catch { photos   = {}; }
-  MEMBERS.forEach(m => { if (!allData[m.id]) allData[m.id] = {}; });
-}
-function saveData()   { localStorage.setItem('dp_all',    JSON.stringify(allData));  }
-function savePhotos() { localStorage.setItem('dp_photos', JSON.stringify(photos)); }
+// ━━━ Firebase 연동 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const memberData = (id) => allData[id || activeMemberId] || {};
+
+function saveData() {
+  set(ref(db, 'allData'), allData).catch(e => console.error('saveData:', e));
+}
+function savePhotos() {
+  set(ref(db, 'photos'), photos).catch(e => console.error('savePhotos:', e));
+}
+
+function loadData() {
+  // 근무 데이터 실시간 구독
+  onValue(ref(db, 'allData'), snap => {
+    allData = snap.val() || {};
+    MEMBERS.forEach(m => { if (!allData[m.id]) allData[m.id] = {}; });
+    renderCalendar();
+    renderMemberBar();
+  });
+  // 사진 실시간 구독
+  onValue(ref(db, 'photos'), snap => {
+    photos = snap.val() || {};
+    renderMemberBar();
+    const sp = document.getElementById('settingsPanel');
+    if (sp && sp.classList.contains('show')) renderSettingsPanel();
+  });
+}
 
 // ━━━ 스플래시 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function initSplash() {
@@ -1122,7 +1157,9 @@ function handleImport(e) {
 function clearAll() {
   if (!confirm('모든 근무 데이터를 삭제합니까?\n(사진은 유지됩니다)')) return;
   MEMBERS.forEach(m => allData[m.id] = {});
-  saveData(); renderCalendar(); renderMemberBar();
+  set(ref(db, 'allData'), allData).then(() => {
+    renderCalendar(); renderMemberBar();
+  });
 }
 
 function dl(content, filename, mime) {
@@ -1134,7 +1171,6 @@ function dl(content, filename, mime) {
 
 // ━━━ 초기화 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function init() {
-  loadData();
   const now    = new Date();
   currentYear  = now.getFullYear();
   currentMonth = now.getMonth() + 1;
@@ -1154,6 +1190,7 @@ function init() {
   document.getElementById('btnList').onclick = openListPanel;
 
   initSplash();
+  loadData(); // Firebase 실시간 구독 시작 → 데이터 오면 자동 렌더
   renderMemberBar();
   renderCalendar();
   initSwipe('todayPanel');
