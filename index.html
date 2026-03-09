@@ -524,6 +524,7 @@ header {
 .tb-duty { font-size: 17px; font-weight: 900; margin-top: 2px; }
 .tb-memo { font-size: 10px; color: var(--muted); margin-top: 2px; }
 </style>
+
 </head>
 <body>
 
@@ -636,12 +637,64 @@ header {
 <input type="file" id="photoInput" accept="image/*" style="display:none" onchange="handlePhotoUpload(event)">
 <input type="file" id="importFile" accept=".json" style="display:none" onchange="handleImport(event)">
 
-<script type="module">
-// ━━━ Firebase SDK ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-import { initializeApp }       from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, set, onValue, remove }
-                                from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+<!-- 근무유형 에디터 모달 -->
+<div class="overlay" id="dutyEditorOverlay" style="z-index:600" onclick="closeDutyEditor(event)">
+  <div class="modal-sheet" style="padding-bottom:40px">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="dutyEditorTitle">근무 유형 추가</div>
+    <div style="margin-top:16px;display:flex;flex-direction:column;gap:12px">
 
+      <!-- 이모지 선택 -->
+      <div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600">이모지</div>
+        <div id="emojiPicker" style="display:flex;flex-wrap:wrap;gap:6px">
+        </div>
+        <input id="customEmoji" type="text" maxlength="2" placeholder="직접입력"
+          style="margin-top:8px;width:80px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:18px;text-align:center;outline:none"
+          oninput="syncEmojiInput(this.value)">
+      </div>
+
+      <!-- 타이틀 -->
+      <div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600">타이틀</div>
+        <input id="dutyLabel" type="text" maxlength="10" placeholder="예: Day3, 특근..."
+          style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;outline:none;font-family:'Noto Sans KR',sans-serif">
+      </div>
+
+      <!-- 시간 -->
+      <div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600">시간</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input id="dutyStart" type="time"
+            style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;outline:none">
+          <span style="color:var(--muted)">~</span>
+          <input id="dutyEnd" type="time"
+            style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;outline:none">
+        </div>
+      </div>
+
+      <!-- 색상 -->
+      <div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600">색상</div>
+        <div id="colorPicker" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        </div>
+      </div>
+
+      <!-- 미리보기 -->
+      <div style="background:var(--surface2);border-radius:12px;padding:12px;display:flex;align-items:center;justify-content:center;gap:10px">
+        <div id="previewBadge" style="font-size:13px;font-weight:700;padding:4px 12px;border-radius:6px">미리보기</div>
+      </div>
+
+    </div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn-cancel" onclick="closeDutyEditor()">취소</button>
+      <button class="btn-save" onclick="saveDutyEditor()">저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ━━━ Firebase 동적 로딩 ━━━━━━━━━━━━━━━━━━━━━━━━
 const firebaseConfig = {
   apiKey:            "AIzaSyCpaIMH1SSAJSfk_1O69A7m7u2ZtesdtEg",
   authDomain:        "ulsan-duty.firebaseapp.com",
@@ -652,8 +705,22 @@ const firebaseConfig = {
   appId:             "1:434652610615:web:fb610fe2638e6ef088bfb2"
 };
 
-const firebaseApp = initializeApp(firebaseConfig);
-const db          = getDatabase(firebaseApp);
+let db = null;
+
+function loadFirebaseSDK() {
+  return new Promise((resolve) => {
+    if (typeof firebase !== 'undefined') { resolve(); return; }
+    const s1 = document.createElement('script');
+    s1.src = 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js';
+    s1.onload = () => {
+      const s2 = document.createElement('script');
+      s2.src = 'https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js';
+      s2.onload = () => resolve();
+      document.head.appendChild(s2);
+    };
+    document.head.appendChild(s1);
+  });
+}
 
 // ━━━ 상수 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const MEMBERS = [
@@ -707,6 +774,7 @@ let currentYear, currentMonth;
 let activeMemberId   = MEMBERS[0].id;
 let allData          = {};
 let photos           = {};
+let customDutyTypes  = {}; // 멤버별 커스텀 근무유형 { memberId: [{id,label,sub,emoji,color},...] }
 let selectedDutyType = null;
 let editingDate      = null;
 let photoTargetId    = null;
@@ -715,27 +783,39 @@ let photoTargetId    = null;
 const memberData = (id) => allData[id || activeMemberId] || {};
 
 function saveData() {
-  set(ref(db, 'allData'), allData).catch(e => console.error('saveData:', e));
+  db.ref('allData').set(allData).catch(e => console.error('saveData:', e));
 }
 function savePhotos() {
-  set(ref(db, 'photos'), photos).catch(e => console.error('savePhotos:', e));
+  db.ref('photos').set(photos).catch(e => console.error('savePhotos:', e));
 }
 
 function loadData() {
-  // 근무 데이터 실시간 구독
-  onValue(ref(db, 'allData'), snap => {
+  db.ref('allData').on('value', snap => {
     allData = snap.val() || {};
     MEMBERS.forEach(m => { if (!allData[m.id]) allData[m.id] = {}; });
     renderCalendar();
     renderMemberBar();
   });
-  // 사진 실시간 구독
-  onValue(ref(db, 'photos'), snap => {
+  db.ref('photos').on('value', snap => {
     photos = snap.val() || {};
     renderMemberBar();
     const sp = document.getElementById('settingsPanel');
     if (sp && sp.classList.contains('show')) renderSettingsPanel();
   });
+  db.ref('customDutyTypes').on('value', snap => {
+    customDutyTypes = snap.val() || {};
+  });
+}
+
+function saveCustomDutyTypes() {
+  db.ref('customDutyTypes').set(customDutyTypes).catch(e => console.error('saveCustom:', e));
+}
+
+// 멤버별 전체 근무유형 (기본 + 커스텀)
+function getAllDutyTypes(memberId) {
+  const base   = getMemberDutyTypes(memberId);
+  const custom = (customDutyTypes[memberId] || []);
+  return [...base, ...custom];
 }
 
 // ━━━ 스플래시 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -846,7 +926,7 @@ function renderStats() {
   nc.innerHTML = `<span style="color:var(--accent);font-weight:700;font-size:11px">${mem.name}</span>`;
   bar.appendChild(nc);
 
-  getMemberDutyTypes(activeMemberId).forEach(dt => {
+  getAllDutyTypes(activeMemberId).forEach(dt => {
     if (!counts[dt.id]) return;
     const chip = document.createElement('div');
     chip.className = 'stat-chip';
@@ -870,7 +950,7 @@ function openDayModal(y, m, d) {
 
   const grid = document.getElementById('dutyGrid');
   grid.innerHTML = '';
-  const activeDutyTypes = getMemberDutyTypes(activeMemberId);
+  const activeDutyTypes = getAllDutyTypes(activeMemberId);
   activeDutyTypes.forEach(dt => {
     const btn = document.createElement('button');
     btn.className = 'duty-btn' + (selectedDutyType === dt.id ? ' selected' : '');
@@ -1065,14 +1145,45 @@ function renderSettingsPanel() {
     body.appendChild(card);
   });
 
-  body.innerHTML += `<div class="sec-label">근무 유형</div>`;
-  DUTY_TYPES.forEach(dt => {
+  // ── 내 근무 유형 관리 ──
+  const mem = MEMBERS.find(x => x.id === activeMemberId);
+  body.innerHTML += `<div class="sec-label">${mem.name} 근무 유형</div>`;
+
+  // 기본 근무유형 (읽기전용)
+  getMemberDutyTypes(activeMemberId).forEach(dt => {
     body.innerHTML += `
       <div class="row-card">
-        <div><div class="row-label">${dt.emoji} ${dt.label}</div><div class="row-sub">${dt.sub}</div></div>
-        <div style="width:11px;height:11px;border-radius:50%;background:${dt.color}"></div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:32px;height:32px;border-radius:8px;background:${dt.color}22;display:flex;align-items:center;justify-content:center;font-size:16px">${dt.emoji}</div>
+          <div><div class="row-label">${dt.label}</div><div class="row-sub">${dt.sub}</div></div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);padding:3px 7px;border:1px solid var(--border);border-radius:6px">기본</div>
       </div>`;
   });
+
+  // 커스텀 근무유형 (수정/삭제 가능)
+  const customs = customDutyTypes[activeMemberId] || [];
+  customs.forEach((dt, idx) => {
+    body.innerHTML += `
+      <div class="row-card">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:32px;height:32px;border-radius:8px;background:${dt.color}22;display:flex;align-items:center;justify-content:center;font-size:16px">${dt.emoji}</div>
+          <div><div class="row-label">${dt.label}</div><div class="row-sub">${dt.sub}</div></div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button onclick="openDutyEditor('${activeMemberId}', ${idx})"
+            style="font-size:11px;padding:4px 9px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer">수정</button>
+          <button onclick="deleteCustomDuty('${activeMemberId}', ${idx})"
+            style="font-size:11px;padding:4px 9px;border-radius:7px;border:1px solid #ef444440;background:none;color:#ef4444;cursor:pointer">삭제</button>
+        </div>
+      </div>`;
+  });
+
+  body.innerHTML += `
+    <button onclick="openDutyEditor('${activeMemberId}', -1)"
+      style="width:100%;padding:12px;border-radius:12px;border:2px dashed var(--border);background:none;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;font-family:'Noto Sans KR',sans-serif;margin-top:4px">
+      + 근무 유형 추가
+    </button>`;
 
   body.innerHTML += `<div class="sec-label">데이터</div>
     <button class="export-btn" onclick="exportCSV()">📤 CSV 내보내기</button>
@@ -1080,6 +1191,128 @@ function renderSettingsPanel() {
     <button class="export-btn" onclick="importJSON()">📥 JSON 불러오기</button>
     <button class="export-btn" style="color:#ef4444;border-color:#ef4444" onclick="clearAll()">🗑️ 전체 초기화</button>`;
 }
+
+// ━━━ 근무유형 에디터 ━━━━━━━━━━━━━━━━━━━━━━━━━
+const EMOJI_LIST  = ['☀️','🌤️','🌞','🌅','🌄','🌆','🌇','🌙','🌃','🌌','🌛','⭐','✨','🏖️','📚','💼','🔧','⚡','🚑','🛡️','🎯','💤'];
+const COLOR_LIST  = ['#f59e0b','#f97316','#eab308','#fb923c','#10b981','#06b6d4','#3b82f6','#6366f1','#8b5cf6','#a855f7','#ec4899','#ef4444','#64748b','#a78bfa'];
+
+let dutyEditorMemberId = null;
+let dutyEditorIndex    = -1; // -1 = 신규
+let selectedEditorEmoji = '⭐';
+let selectedEditorColor = '#f59e0b';
+
+function openDutyEditor(memberId, idx) {
+  dutyEditorMemberId = memberId;
+  dutyEditorIndex    = idx;
+  const isNew = idx === -1;
+  const existing = isNew ? null : (customDutyTypes[memberId] || [])[idx];
+
+  document.getElementById('dutyEditorTitle').textContent = isNew ? '근무 유형 추가' : '근무 유형 수정';
+  document.getElementById('dutyLabel').value  = existing?.label || '';
+  document.getElementById('customEmoji').value = existing?.emoji || '';
+
+  // 시간 파싱
+  const sub = existing?.sub || '';
+  const times = sub.match(/(\d{2}:\d{2})~(\d{2}:\d{2})/);
+  document.getElementById('dutyStart').value = times ? times[1] : '';
+  document.getElementById('dutyEnd').value   = times ? times[2] : '';
+
+  selectedEditorEmoji = existing?.emoji  || '⭐';
+  selectedEditorColor = existing?.color  || '#f59e0b';
+
+  renderEmojiPicker();
+  renderColorPicker();
+  updatePreview();
+
+  document.getElementById('dutyEditorOverlay').classList.add('show');
+}
+
+function renderEmojiPicker() {
+  const wrap = document.getElementById('emojiPicker');
+  wrap.innerHTML = '';
+  EMOJI_LIST.forEach(em => {
+    const btn = document.createElement('button');
+    btn.textContent = em;
+    btn.style.cssText = `font-size:22px;width:40px;height:40px;border-radius:10px;border:2px solid ${em===selectedEditorEmoji?'var(--accent)':'var(--border)'};background:${em===selectedEditorEmoji?'rgba(108,99,255,.15)':'var(--surface2)'};cursor:pointer;transition:all .1s`;
+    btn.onclick = () => { selectedEditorEmoji = em; document.getElementById('customEmoji').value = em; renderEmojiPicker(); updatePreview(); };
+    wrap.appendChild(btn);
+  });
+}
+
+function renderColorPicker() {
+  const wrap = document.getElementById('colorPicker');
+  wrap.innerHTML = '';
+  COLOR_LIST.forEach(c => {
+    const btn = document.createElement('button');
+    btn.style.cssText = `width:30px;height:30px;border-radius:50%;background:${c};border:3px solid ${c===selectedEditorColor?'#fff':'transparent'};cursor:pointer;transition:all .1s;outline:${c===selectedEditorColor?'2px solid '+c:'none'}`;
+    btn.onclick = () => { selectedEditorColor = c; renderColorPicker(); updatePreview(); };
+    wrap.appendChild(btn);
+  });
+  // 직접 입력 color picker
+  const inp = document.createElement('input');
+  inp.type = 'color'; inp.value = selectedEditorColor;
+  inp.style.cssText = 'width:30px;height:30px;border-radius:50%;border:none;cursor:pointer;padding:0;background:none';
+  inp.oninput = e => { selectedEditorColor = e.target.value; renderColorPicker(); updatePreview(); };
+  wrap.appendChild(inp);
+}
+
+function syncEmojiInput(val) {
+  if (val) { selectedEditorEmoji = val; renderEmojiPicker(); updatePreview(); }
+}
+
+function updatePreview() {
+  const label = document.getElementById('dutyLabel').value || '미리보기';
+  const badge = document.getElementById('previewBadge');
+  badge.textContent = selectedEditorEmoji + ' ' + label;
+  badge.style.cssText = `font-size:14px;font-weight:700;padding:6px 14px;border-radius:8px;background:${selectedEditorColor}28;color:${selectedEditorColor}`;
+}
+
+function closeDutyEditor(e) {
+  if (e && e.target !== document.getElementById('dutyEditorOverlay')) return;
+  document.getElementById('dutyEditorOverlay').classList.remove('show');
+}
+
+function saveDutyEditor() {
+  const label = document.getElementById('dutyLabel').value.trim();
+  const start = document.getElementById('dutyStart').value;
+  const end   = document.getElementById('dutyEnd').value;
+  if (!label) { alert('타이틀을 입력해주세요'); return; }
+
+  const sub = (start && end) ? `${start}~${end}` : '시간 미설정';
+  const newDt = {
+    id:    'custom_' + dutyEditorMemberId + '_' + Date.now(),
+    label, sub,
+    emoji: selectedEditorEmoji,
+    color: selectedEditorColor,
+  };
+
+  if (!customDutyTypes[dutyEditorMemberId]) customDutyTypes[dutyEditorMemberId] = [];
+
+  if (dutyEditorIndex === -1) {
+    customDutyTypes[dutyEditorMemberId].push(newDt);
+  } else {
+    // 수정 시 id 유지
+    newDt.id = (customDutyTypes[dutyEditorMemberId][dutyEditorIndex] || {}).id || newDt.id;
+    customDutyTypes[dutyEditorMemberId][dutyEditorIndex] = newDt;
+  }
+
+  saveCustomDutyTypes();
+  document.getElementById('dutyEditorOverlay').classList.remove('show');
+  renderSettingsPanel();
+}
+
+function deleteCustomDuty(memberId, idx) {
+  if (!confirm('이 근무 유형을 삭제할까요?')) return;
+  customDutyTypes[memberId].splice(idx, 1);
+  saveCustomDutyTypes();
+  renderSettingsPanel();
+}
+
+// 라벨 실시간 미리보기
+setTimeout(() => {
+  const lbl = document.getElementById('dutyLabel');
+  if (lbl) lbl.addEventListener('input', updatePreview);
+}, 500);
 
 // ━━━ 사진 업로드 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function triggerPhotoUpload(memberId) {
@@ -1157,7 +1390,7 @@ function handleImport(e) {
 function clearAll() {
   if (!confirm('모든 근무 데이터를 삭제합니까?\n(사진은 유지됩니다)')) return;
   MEMBERS.forEach(m => allData[m.id] = {});
-  set(ref(db, 'allData'), allData).then(() => {
+  db.ref('allData').set(allData).then(() => {
     renderCalendar(); renderMemberBar();
   });
 }
@@ -1170,7 +1403,7 @@ function dl(content, filename, mime) {
 }
 
 // ━━━ 초기화 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function init() {
+function initApp() {
   const now    = new Date();
   currentYear  = now.getFullYear();
   currentMonth = now.getMonth() + 1;
@@ -1190,7 +1423,7 @@ function init() {
   document.getElementById('btnList').onclick = openListPanel;
 
   initSplash();
-  loadData(); // Firebase 실시간 구독 시작 → 데이터 오면 자동 렌더
+  loadData();
   renderMemberBar();
   renderCalendar();
   initSwipe('todayPanel');
@@ -1198,7 +1431,12 @@ function init() {
   initSwipe('settingsPanel');
 }
 
-init();
+// Firebase SDK 로드 후 앱 시작
+loadFirebaseSDK().then(() => {
+  const firebaseApp = firebase.initializeApp(firebaseConfig);
+  db = firebaseApp.database();
+  initApp();
+});
 </script>
 </body>
 </html>
