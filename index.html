@@ -992,8 +992,7 @@ function renderCalendar() {
         badge.className = 'multi-badge';
         badge.innerHTML = `
           <span class="mb-name">${mem.name.slice(1,3)}</span>
-          <span class="mb-duty">${dt.emoji}${dt.label}</span>
-          <span class="mb-time">${dt.sub}</span>`;
+          <span class="mb-duty">${dt.label}</span>`;
         badge.style.cssText = `background:${dt.color}22;color:${dt.color}`;
         cell.appendChild(badge);
       });
