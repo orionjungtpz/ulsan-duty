@@ -396,7 +396,9 @@ header {
 .side-panel.show { transform: translateX(0); }
 .panel-header {
   background: var(--surface); border-bottom: 1px solid var(--border);
-  padding: 13px 16px; display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 13px);
+  padding-bottom: 13px; padding-left: 16px; padding-right: 16px;
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
 }
 .panel-back {
   background: none; border: none; color: var(--accent);
@@ -891,6 +893,37 @@ function closePanel(id) {
   document.getElementById('tabCal').classList.add('active');
 }
 
+// ━━━ 스와이프로 패널 닫기 ━━━━━━━━━━━━━━━━━━━━━
+function initSwipe(panelId) {
+  const el = document.getElementById(panelId);
+  let startX = 0, startY = 0, isDragging = false;
+
+  el.addEventListener('touchstart', e => {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    isDragging = false;
+  }, { passive: true });
+
+  el.addEventListener('touchmove', e => {
+    const dx = e.touches[0].clientX - startX;
+    const dy = Math.abs(e.touches[0].clientY - startY);
+    if (!isDragging && dx > 10 && dy < 40) isDragging = true;
+    if (isDragging && dx > 0) {
+      el.style.transition = 'none';
+      el.style.transform = `translateX(${dx}px)`;
+    }
+  }, { passive: true });
+
+  el.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - startX;
+    el.style.transition = '';
+    if (dx > 80) {
+      closePanel(panelId);
+    }
+    el.style.transform = '';
+  }, { passive: true });
+}
+
 // ━━━ 오늘 패널 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function renderTodayPanel() {
   const body = document.getElementById('todayPanelBody');
@@ -1123,6 +1156,9 @@ function init() {
   initSplash();
   renderMemberBar();
   renderCalendar();
+  initSwipe('todayPanel');
+  initSwipe('listPanel');
+  initSwipe('settingsPanel');
 }
 
 init();
