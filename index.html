@@ -21,10 +21,12 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="application-name" content="울산듀티">
 <meta name="theme-color" content="#0f0f13">
+  <meta name="color-scheme" content="dark">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Space+Mono:wght@400;700&display=swap');
 
 :root {
+  color-scheme: dark;
   --bg: #0f0f13;
   --surface: #1a1a22;
   --surface2: #22222e;
@@ -284,7 +286,7 @@ header {
   background: var(--surface);
   display: flex; flex-direction: column;
   align-items: center; padding: 3px 2px 2px;
-  cursor: pointer; gap: 1px;
+  cursor: pointer; gap: 2px;
   transition: background .12s; min-height: 0; overflow: hidden;
 }
 .day-cell:hover { background: var(--surface2); }
@@ -297,13 +299,6 @@ header {
 .day-cell.sun .day-num { color: #ef4444; }
 .day-cell.sat .day-num { color: #60a5fa; }
 .day-cell.today.sun .day-num, .day-cell.today.sat .day-num { color: #fff; }
-.day-cell.holiday .day-num { color: #ef4444; }
-.holiday-label {
-  font-size: 7px; color: #ef4444; font-weight: 700;
-  width: 100%; text-align: center;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  line-height: 1.2;
-}
 
 .day-num { font-size: 11px; font-weight: 700; font-family: 'Space Mono', monospace; line-height: 1; }
 .duty-badge {
@@ -313,12 +308,13 @@ header {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .multi-badge {
-  font-size: 7.5px; font-weight: 700;
-  padding: 1px 3px; border-radius: 3px;
-  line-height: 1.4; max-width: 100%; text-align: left;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  width: 100%;
+  padding: 2px 4px; border-radius: 4px;
+  width: 100%; display: flex; align-items: center; gap: 3px;
+  overflow: hidden;
 }
+.multi-badge .mb-name { font-size: 8px; opacity: .6; font-weight: 700; flex-shrink: 0; }
+.multi-badge .mb-duty { font-size: 9px; font-weight: 800; flex-shrink: 0; }
+.multi-badge .mb-time { font-size: 7.5px; opacity: .65; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .day-memo {
   font-size: 8px; color: var(--muted);
   width: 100%; text-align: center;
@@ -358,8 +354,22 @@ header {
   max-height: 92dvh; overflow-y: auto;
 }
 .overlay.show .modal-sheet { transform: translateY(0); }
+
+/* 근무 입력 - 달력 보이는 하단 패널 */
+.day-overlay {
+  background: transparent !important;
+  backdrop-filter: none !important;
+  align-items: flex-end;
+  pointer-events: none;
+}
+.day-overlay.show { pointer-events: all; }
+.day-overlay .modal-sheet {
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -8px 40px rgba(0,0,0,.7);
+  max-height: 52dvh;
+}
 .modal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 14px; }
-.modal-title { font-size: 15px; font-weight: 700; text-align: center; margin-bottom: 3px; }
+.modal-title { font-size: 15px; font-weight: 700; text-align: center; margin-bottom: 3px; font-family: -apple-system, "SF Pro Text", "Noto Sans KR", sans-serif; letter-spacing: -0.3px; }
 .modal-sub { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--accent); text-align: center; margin-bottom: 14px; }
 
 .duty-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; margin-bottom: 14px; }
@@ -400,6 +410,62 @@ header {
   font-family: 'Noto Sans KR', sans-serif; transition: background .15s;
 }
 .btn-save:hover { background: #5855e8; }
+
+@keyframes btn-bounce {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.18); }
+  70%  { transform: scale(0.93); }
+  100% { transform: scale(1); }
+}
+@keyframes cell-flash {
+  0%   { background: var(--surface); }
+  30%  { background: color-mix(in srgb, var(--flash-color, #6c63ff) 35%, var(--surface)); }
+  100% { background: var(--surface); }
+}
+.duty-btn.bounce { animation: btn-bounce .35s cubic-bezier(.36,.07,.19,.97); }
+.day-cell.flash  { animation: cell-flash .5s ease-out; }
+
+/* ══ 근무 입력 모달 네비 ══ */
+.modal-nav-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 14px;
+}
+.modal-date-display {
+  flex: 1;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  font-family: -apple-system, 'Noto Sans KR', sans-serif;
+  letter-spacing: -0.3px;
+}
+.modal-nav-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 400;
+  padding: 4px 2px;
+  cursor: pointer;
+  font-family: -apple-system, 'Noto Sans KR', sans-serif;
+  letter-spacing: -0.2px;
+  flex-shrink: 0;
+  transition: opacity .15s;
+  white-space: nowrap;
+}
+.modal-nav-btn:active { opacity: 0.4; }
+
+.modal-close-btn {
+  width: 100%; margin-top: 6px;
+  background: var(--surface2); border: none;
+  color: var(--muted); border-radius: 14px; padding: 13px;
+  font-size: 15px; font-weight: 600; cursor: pointer;
+  font-family: -apple-system, 'SF Pro Text', 'Noto Sans KR', sans-serif;
+  letter-spacing: -0.2px; transition: opacity .15s;
+}
+.modal-close-btn:active { opacity: 0.5; }
 
 /* ══ 슬라이드 패널 ══ */
 .side-panel {
@@ -607,17 +673,17 @@ header {
 </div><!-- /mainApp -->
 
 <!-- 근무 입력 모달 -->
-<div class="overlay" id="dayOverlay" onclick="closeDayModal(event)">
+<div class="overlay day-overlay" id="dayOverlay" onclick="closeDayModal(event)">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
     <div class="modal-title" id="modalMemberName"></div>
-    <div class="modal-sub" id="modalDateTxt"></div>
-    <div class="duty-grid" id="dutyGrid"></div>
-    <textarea class="memo-area" id="memoInput" placeholder="메모 입력 (선택)"></textarea>
-    <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeDayModal()">취소</button>
-      <button class="btn-save" onclick="saveDuty()">저장</button>
+    <div class="modal-nav-row">
+      <button class="modal-nav-btn" onclick="modalMoveDays(-1)">‹ 전날</button>
+      <div class="modal-date-display" id="modalDateTxt"></div>
+      <button class="modal-nav-btn" onclick="modalMoveDays(1)">다음날 ›</button>
     </div>
+    <div class="duty-grid" id="dutyGrid"></div>
+    <button class="modal-close-btn" onclick="closeDayModal()">닫기</button>
   </div>
 </div>
 
@@ -791,7 +857,6 @@ let activeMemberId   = 'ALL';
 let allData          = {};
 let photos           = {};
 let customDutyTypes  = {};
-let holidays         = {}; // { 'YYYY-MM-DD': '공휴일명' }
 let selectedDutyType = null;
 let editingDate      = null;
 let photoTargetId    = null;
@@ -835,45 +900,6 @@ function getAllDutyTypes(memberId) {
   return [...base, ...custom];
 }
 
-// ━━━ 공휴일 API ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-const HOLIDAY_API_KEY = '9c63fe27da45656e1b223d173b18d5997daac23cc3f9aacd53e27400a8a030a0';
-
-async function fetchHolidays(year, month) {
-  const cacheKey = `holiday_${year}_${pad(month)}`;
-  // 캐시 확인
-  const cached = localStorage.getItem(cacheKey);
-  if (cached) {
-    const parsed = JSON.parse(cached);
-    Object.assign(holidays, parsed);
-    return;
-  }
-
-  try {
-    const url = `https://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo` +
-      `?serviceKey=${HOLIDAY_API_KEY}&solYear=${year}&solMonth=${pad(month)}&_type=json&numOfRows=50`;
-    const res  = await fetch(url);
-    const json = await res.json();
-    const items = json?.response?.body?.items?.item;
-    if (!items) return;
-
-    const list = Array.isArray(items) ? items : [items];
-    const monthly = {};
-    list.forEach(item => {
-      const dateStr = String(item.locdate);
-      const key = `${dateStr.slice(0,4)}-${dateStr.slice(4,6)}-${dateStr.slice(6,8)}`;
-      holidays[key] = item.dateName;
-      monthly[key]  = item.dateName;
-    });
-    localStorage.setItem(cacheKey, JSON.stringify(monthly));
-  } catch(e) {
-    console.warn('공휴일 API 오류:', e);
-  }
-}
-
-async function loadHolidaysForMonth(year, month) {
-  await fetchHolidays(year, month);
-  renderCalendar();
-}
 
 // ━━━ 스플래시 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function initSplash() {
@@ -920,9 +946,6 @@ function renderCalendar() {
   const grid = document.getElementById('calGrid');
   grid.innerHTML = '';
   document.getElementById('monthTitle').textContent = `${currentYear}.${pad(currentMonth)}`;
-  // 공휴일 로드 (캐시 없으면 fetch)
-  loadHolidaysForMonth(currentYear, currentMonth);
-
   const firstDay = new Date(currentYear, currentMonth - 1, 1).getDay();
   const lastDate = new Date(currentYear, currentMonth, 0).getDate();
   const prevLast = new Date(currentYear, currentMonth - 1, 0).getDate();
@@ -948,22 +971,14 @@ function renderCalendar() {
     const key     = dateKey(y, m, d);
     const entry   = data[key];
 
-    const isHoliday = !other && holidays[key];
     const cell = document.createElement('div');
-    cell.className = ['day-cell', dow===0?'sun':'', dow===6?'sat':'', other?'other-month':'', isToday?'today':'', isHoliday?'holiday':''].filter(Boolean).join(' ');
+    cell.className = ['day-cell', dow===0?'sun':'', dow===6?'sat':'', other?'other-month':'', isToday?'today':''].filter(Boolean).join(' ');
 
     const numEl = document.createElement('div');
     numEl.className = 'day-num';
     numEl.textContent = d;
     cell.appendChild(numEl);
 
-    // 공휴일 이름 표시
-    if (isHoliday) {
-      const hlabel = document.createElement('div');
-      hlabel.className = 'holiday-label';
-      hlabel.textContent = holidays[key];
-      cell.appendChild(hlabel);
-    }
 
     if (activeMemberId === 'ALL') {
       // ALL 탭: 입력된 멤버 전체 표시
@@ -975,7 +990,10 @@ function renderCalendar() {
         if (!dt) return;
         const badge = document.createElement('div');
         badge.className = 'multi-badge';
-        badge.innerHTML = `<span style="opacity:.6">${mem.name.slice(0,2)}</span> ${dt.label}`;
+        badge.innerHTML = `
+          <span class="mb-name">${mem.name.slice(1,3)}</span>
+          <span class="mb-duty">${dt.emoji}${dt.label}</span>
+          <span class="mb-time">${dt.sub}</span>`;
         badge.style.cssText = `background:${dt.color}22;color:${dt.color}`;
         cell.appendChild(badge);
       });
@@ -1102,8 +1120,6 @@ function openAllDayModal(y, m, d) {
 
   if (!hasAny) grid.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px">입력된 근무가 없습니다</div>';
 
-  document.getElementById('memoInput').style.display = 'none';
-  document.querySelector('.modal-actions').style.display = 'none';
   document.getElementById('dayOverlay').classList.add('show');
 }
 
@@ -1111,25 +1127,29 @@ function openAllDayModal(y, m, d) {
 function openDayModal(y, m, d) {
   editingDate      = dateKey(y, m, d);
   selectedDutyType = null;
-  const mem   = MEMBERS.find(x => x.id === activeMemberId);
-  const dow   = new Date(y, m-1, d).getDay();
-  const entry = memberData()[editingDate];
+  renderDayModal();
+  document.getElementById('dayOverlay').classList.add('show');
+}
+
+function renderDayModal() {
+  const [y, m, d]  = editingDate.split('-').map(Number);
+  const mem        = MEMBERS.find(x => x.id === activeMemberId);
+  const dow        = new Date(y, m-1, d).getDay();
+  const entry      = memberData()[editingDate];
+  selectedDutyType = entry?.type || null;
 
   document.getElementById('modalMemberName').textContent = mem.name;
-  document.getElementById('modalDateTxt').textContent    = `${y}년 ${m}월 ${d}일 (${DAYS_KR[dow]})`;
-  document.getElementById('memoInput').value = entry?.memo || '';
-  if (entry) selectedDutyType = entry.type;
+  document.getElementById('modalDateTxt').textContent    = `${m}월 ${d}일 (${DAYS_KR[dow]})`;
 
   const grid = document.getElementById('dutyGrid');
   grid.innerHTML = '';
-  const activeDutyTypes = getAllDutyTypes(activeMemberId);
-  activeDutyTypes.forEach(dt => {
+  getAllDutyTypes(activeMemberId).forEach(dt => {
     const btn = document.createElement('button');
     btn.className = 'duty-btn' + (selectedDutyType === dt.id ? ' selected' : '');
     btn.style.color = dt.color;
     btn.id = 'dbtn_' + dt.id;
     btn.innerHTML = `<span class="btn-emoji">${dt.emoji}</span>${dt.label}<span style="font-size:8px;opacity:.7;font-weight:400">${dt.sub}</span>`;
-    btn.onclick = () => selectDutyType(dt.id);
+    btn.onclick = () => saveDutyInstant(dt.id);
     grid.appendChild(btn);
   });
 
@@ -1138,35 +1158,66 @@ function openDayModal(y, m, d) {
     del.className = 'duty-btn';
     del.style.color = '#ef4444';
     del.innerHTML = '<span class="btn-emoji">🗑️</span>삭제';
-    del.onclick = () => { delete allData[activeMemberId][editingDate]; saveData(); renderCalendar(); closeDayModal(); };
+    del.onclick = () => {
+      delete allData[activeMemberId][editingDate];
+      saveData(); renderCalendar(); renderDayModal();
+    };
     grid.appendChild(del);
   }
-
-  document.getElementById('dayOverlay').classList.add('show');
 }
 
-function selectDutyType(id) {
-  selectedDutyType = id;
-  document.querySelectorAll('.duty-btn').forEach(b => b.classList.remove('selected'));
-  document.getElementById('dbtn_' + id)?.classList.add('selected');
-}
-
-function saveDuty() {
-  if (!selectedDutyType || !editingDate) { closeDayModal(); return; }
+// 근무 탭 → 즉시 저장 → 달력 반영 → 모달 유지
+function saveDutyInstant(dutyId) {
   if (!allData[activeMemberId]) allData[activeMemberId] = {};
-  allData[activeMemberId][editingDate] = {
-    type: selectedDutyType,
-    memo: document.getElementById('memoInput').value.trim()
-  };
-  saveData(); renderCalendar(); closeDayModal();
+  allData[activeMemberId][editingDate] = { type: dutyId, memo: '' };
+  selectedDutyType = dutyId;
+
+  // 버튼 bounce 효과
+  const btn = document.getElementById('dbtn_' + dutyId);
+  if (btn) {
+    btn.classList.remove('bounce');
+    void btn.offsetWidth; // reflow
+    btn.classList.add('bounce');
+  }
+
+  saveData();
+  renderCalendar();
+
+  // 달력 날짜 flash 효과
+  const dt = [...DUTY_TYPES, ...(customDutyTypes[activeMemberId] || [])].find(t => t.id === dutyId);
+  const cells = document.querySelectorAll('.day-cell');
+  cells.forEach(cell => {
+    const numEl = cell.querySelector('.day-num');
+    const [y, m, d] = editingDate.split('-').map(Number);
+    if (numEl && parseInt(numEl.textContent) === d) {
+      if (dt) cell.style.setProperty('--flash-color', dt.color);
+      cell.classList.remove('flash');
+      void cell.offsetWidth;
+      cell.classList.add('flash');
+      setTimeout(() => cell.classList.remove('flash'), 500);
+    }
+  });
+
+  // 저장 후 자동 다음날 이동
+  setTimeout(() => modalMoveDays(1), 180);
 }
+
+// 전날/다음날 이동
+function modalMoveDays(delta) {
+  const [y, m, d] = editingDate.split('-').map(Number);
+  const next = new Date(y, m - 1, d + delta);
+  const ny = next.getFullYear(), nm = next.getMonth() + 1, nd = next.getDate();
+  if (nm !== currentMonth || ny !== currentYear) {
+    currentYear = ny; currentMonth = nm; renderCalendar();
+  }
+  editingDate = dateKey(ny, nm, nd);
+  renderDayModal();
+}
+
 
 function closeDayModal(e) {
   if (e && e.target !== document.getElementById('dayOverlay')) return;
   document.getElementById('dayOverlay').classList.remove('show');
-  // ALL 모달에서 숨긴 요소 복원
-  document.getElementById('memoInput').style.display = '';
-  document.querySelector('.modal-actions').style.display = '';
   document.getElementById('dutyGrid').style.gridTemplateColumns = 'repeat(4,1fr)';
 }
 
