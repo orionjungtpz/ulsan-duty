@@ -752,6 +752,7 @@ const DUTY_TYPES = [
   { id:'night2', label:'Night2',  sub:'19:00~07:00', emoji:'🌃',  color:'#06b6d4' },
   { id:'night3', label:'Night',   sub:'22:00~06:00', emoji:'🌌',  color:'#6366f1' },
   { id:'off',    label:'오프',    sub:'Off Day',     emoji:'✨',  color:'#64748b' },
+  { id:'office',  label:'Office',  sub:'08:00~17:00', emoji:'💼',  color:'#0ea5e9' },
   { id:'vac',    label:'휴가',    sub:'Vacation',    emoji:'🏖️',  color:'#10b981' },
   { id:'edu',    label:'교육',    sub:'Education',   emoji:'📚',  color:'#a78bfa' },
 ];
@@ -761,9 +762,9 @@ const MEMBER_DUTY_SETS = {
   'han_sh':  ['day3', 'off', 'vac', 'edu'],
   'lee_jh':  ['day', 'day2', 'eve', 'night', 'night2', 'off', 'vac', 'edu'],
   'park_hc': ['day2', 'night2', 'vac', 'edu'],
-  'lee_kw':  ['day4', 'eve2', 'night3', 'off', 'vac', 'edu'],
+  'lee_kw':  ['day4', 'eve2', 'night3', 'off', 'office', 'vac', 'edu'],
   'han_sk':  ['day5', 'off', 'vac', 'edu'],
-  'lee_jl':  ['day4', 'eve2', 'night3', 'off', 'vac', 'edu'],
+  'lee_jl':  ['day4', 'eve2', 'night3', 'off', 'office', 'vac', 'edu'],
 };
 
 function getMemberDutyTypes(memberId) {
@@ -779,7 +780,7 @@ const DAYS_KR = ['일','월','화','수','목','금','토'];
 
 // ━━━ 상태 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 let currentYear, currentMonth;
-let activeMemberId   = MEMBERS[0].id;
+let activeMemberId   = 'ALL';
 let allData          = {};
 let photos           = {};
 let customDutyTypes  = {}; // 멤버별 커스텀 근무유형 { memberId: [{id,label,sub,emoji,color},...] }
@@ -788,7 +789,7 @@ let editingDate      = null;
 let photoTargetId    = null;
 
 // ━━━ Firebase 연동 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-const memberData = (id) => allData[id || activeMemberId] || {};
+const memberData = (id) => { const mid = id || activeMemberId; return mid === 'ALL' ? {} : (allData[mid] || {}); };
 
 function saveData() {
   db.ref('allData').set(allData).catch(e => console.error('saveData:', e));
@@ -842,6 +843,16 @@ function initSplash() {
 function renderMemberBar() {
   const bar = document.getElementById('memberBar');
   bar.innerHTML = '';
+
+  // ALL 탭
+  const allChip = document.createElement('div');
+  allChip.className = 'member-chip' + (activeMemberId === 'ALL' ? ' active' : '');
+  allChip.onclick = () => { activeMemberId = 'ALL'; renderMemberBar(); renderCalendar(); };
+  allChip.innerHTML = `
+    <div class="member-avatar" style="background:${activeMemberId==='ALL'?'var(--accent)':'var(--surface2)'};border-color:${activeMemberId==='ALL'?'var(--accent)':'var(--border)'};font-size:11px;color:#fff;font-weight:900">ALL</div>
+    <div class="member-name">전체</div>`;
+  bar.appendChild(allChip);
+
   MEMBERS.forEach(m => {
     const chip = document.createElement('div');
     chip.className = 'member-chip' + (m.id === activeMemberId ? ' active' : '');
@@ -895,24 +906,46 @@ function renderCalendar() {
     numEl.textContent = d;
     cell.appendChild(numEl);
 
-    // 전체 멤버 근무 표시 (입력된 멤버만)
-    MEMBERS.forEach(mem => {
-      const memEntry = (allData[mem.id] || {})[key];
-      if (!memEntry) return;
-      // 기본 + 커스텀 전체에서 찾기
-      const allTypes = [...DUTY_TYPES, ...(customDutyTypes[mem.id] || [])];
-      const dt = allTypes.find(t => t.id === memEntry.type);
-      if (!dt) return;
-      const badge = document.createElement('div');
-      badge.className = 'multi-badge';
-      // 활성 멤버는 이름 강조
-      const nameStr = mem.name.slice(0,2);
-      badge.innerHTML = `<span style="opacity:.65">${nameStr}</span> ${dt.label}`;
-      badge.style.cssText = `background:${dt.color}22;color:${dt.color}`;
-      cell.appendChild(badge);
-    });
+    if (activeMemberId === 'ALL') {
+      // ALL 탭: 입력된 멤버 전체 표시
+      MEMBERS.forEach(mem => {
+        const memEntry = (allData[mem.id] || {})[key];
+        if (!memEntry) return;
+        const allTypes = [...DUTY_TYPES, ...(customDutyTypes[mem.id] || [])];
+        const dt = allTypes.find(t => t.id === memEntry.type);
+        if (!dt) return;
+        const badge = document.createElement('div');
+        badge.className = 'multi-badge';
+        badge.innerHTML = `<span style="opacity:.6">${mem.name.slice(0,2)}</span> ${dt.label}`;
+        badge.style.cssText = `background:${dt.color}22;color:${dt.color}`;
+        cell.appendChild(badge);
+      });
+    } else {
+      // 개인 탭: 본인 근무만 표시
+      const entry = (allData[activeMemberId] || {})[key];
+      if (entry) {
+        const allTypes = [...DUTY_TYPES, ...(customDutyTypes[activeMemberId] || [])];
+        const dt = allTypes.find(t => t.id === entry.type);
+        if (dt) {
+          const badge = document.createElement('div');
+          badge.className = 'duty-badge';
+          badge.textContent = dt.emoji + ' ' + dt.label;
+          badge.style.cssText = `background:${dt.color}28;color:${dt.color}`;
+          cell.appendChild(badge);
+        }
+        if (entry.memo) {
+          const memo = document.createElement('div');
+          memo.className = 'day-memo';
+          memo.textContent = entry.memo;
+          cell.appendChild(memo);
+        }
+      }
+    }
 
-    cell.onclick = () => openDayModal(y, m, d);
+    cell.onclick = () => {
+      if (activeMemberId === 'ALL') openAllDayModal(y, m, d);
+      else openDayModal(y, m, d);
+    };
     grid.appendChild(cell);
   }
   renderStats();
@@ -922,25 +955,97 @@ function renderCalendar() {
 function renderStats() {
   const bar    = document.getElementById('statsBar');
   bar.innerHTML = '';
-  const data   = memberData();
   const prefix = `${currentYear}-${pad(currentMonth)}-`;
   const counts = {};
   DUTY_TYPES.forEach(dt => counts[dt.id] = 0);
-  Object.keys(data).forEach(k => { if (k.startsWith(prefix)) counts[data[k].type]++; });
 
-  const mem = MEMBERS.find(x => x.id === activeMemberId);
-  const nc  = document.createElement('div');
-  nc.className = 'stat-chip';
-  nc.innerHTML = `<span style="color:var(--accent);font-weight:700;font-size:11px">${mem.name}</span>`;
-  bar.appendChild(nc);
+  if (activeMemberId === 'ALL') {
+    // 전체 합산
+    const nc = document.createElement('div');
+    nc.className = 'stat-chip';
+    nc.innerHTML = `<span style="color:var(--accent);font-weight:700;font-size:11px">전체</span>`;
+    bar.appendChild(nc);
+    MEMBERS.forEach(mem => {
+      const data = allData[mem.id] || {};
+      Object.keys(data).forEach(k => { if (k.startsWith(prefix) && counts[data[k].type] !== undefined) counts[data[k].type]++; });
+    });
+    DUTY_TYPES.forEach(dt => {
+      if (!counts[dt.id]) return;
+      const chip = document.createElement('div');
+      chip.className = 'stat-chip';
+      chip.innerHTML = `<div class="stat-dot" style="background:${dt.color}"></div><span class="stat-label">${dt.label}</span><span class="stat-val" style="color:${dt.color}">${counts[dt.id]}</span>`;
+      bar.appendChild(chip);
+    });
+  } else {
+    const data = memberData();
+    Object.keys(data).forEach(k => { if (k.startsWith(prefix) && counts[data[k].type] !== undefined) counts[data[k].type]++; });
+    const mem = MEMBERS.find(x => x.id === activeMemberId);
+    const nc  = document.createElement('div');
+    nc.className = 'stat-chip';
+    nc.innerHTML = `<span style="color:var(--accent);font-weight:700;font-size:11px">${mem.name}</span>`;
+    bar.appendChild(nc);
+    getAllDutyTypes(activeMemberId).forEach(dt => {
+      if (!counts[dt.id]) return;
+      const chip = document.createElement('div');
+      chip.className = 'stat-chip';
+      chip.innerHTML = `<div class="stat-dot" style="background:${dt.color}"></div><span class="stat-label">${dt.label}</span><span class="stat-val" style="color:${dt.color}">${counts[dt.id]}</span>`;
+      bar.appendChild(chip);
+    });
+  }
+}
 
-  getAllDutyTypes(activeMemberId).forEach(dt => {
-    if (!counts[dt.id]) return;
-    const chip = document.createElement('div');
-    chip.className = 'stat-chip';
-    chip.innerHTML = `<div class="stat-dot" style="background:${dt.color}"></div><span class="stat-label">${dt.label}</span><span class="stat-val" style="color:${dt.color}">${counts[dt.id]}</span>`;
-    bar.appendChild(chip);
+// ━━━ ALL 날짜 모달 (전체 현황) ━━━━━━━━━━━━━━━━━
+function openAllDayModal(y, m, d) {
+  const dow = new Date(y, m-1, d).getDay();
+  const key = dateKey(y, m, d);
+
+  // 모달 타이틀 재활용
+  document.getElementById('modalMemberName').textContent = `${y}년 ${m}월 ${d}일 (${DAYS_KR[dow]}) 전체 현황`;
+  document.getElementById('modalDateTxt').textContent = '';
+
+  const grid = document.getElementById('dutyGrid');
+  grid.style.gridTemplateColumns = '1fr';
+  grid.innerHTML = '';
+
+  let hasAny = false;
+  MEMBERS.forEach(mem => {
+    const entry = (allData[mem.id] || {})[key];
+    const allTypes = [...DUTY_TYPES, ...(customDutyTypes[mem.id] || [])];
+    const dt = entry ? allTypes.find(t => t.id === entry.type) : null;
+    const photo = photos[mem.id];
+
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--surface2);border-radius:12px;border:1px solid var(--border)';
+    row.innerHTML = `
+      <div style="width:38px;height:38px;border-radius:50%;overflow:hidden;background:var(--surface);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--muted);flex-shrink:0">
+        ${photo ? `<img src="${photo}" style="width:100%;height:100%;object-fit:cover">` : mem.short}
+      </div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:700">${mem.name}</div>
+        <div style="font-size:12px;margin-top:2px;color:${dt ? dt.color : 'var(--muted)'}">
+          ${dt ? dt.emoji + ' ' + dt.label + ' <span style="opacity:.7;font-size:10px">' + dt.sub + '</span>' : '미입력'}
+        </div>
+        ${entry?.memo ? `<div style="font-size:10px;color:var(--muted);margin-top:2px">${entry.memo}</div>` : ''}
+      </div>`;
+
+    // 탭하면 해당 멤버로 전환 후 입력 모달 열기
+    row.onclick = () => {
+      activeMemberId = mem.id;
+      renderMemberBar();
+      grid.style.gridTemplateColumns = 'repeat(4,1fr)';
+      document.getElementById('dayOverlay').classList.remove('show');
+      setTimeout(() => openDayModal(y, m, d), 150);
+    };
+    row.style.cursor = 'pointer';
+    grid.appendChild(row);
+    hasAny = true;
   });
+
+  if (!hasAny) grid.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px">입력된 근무가 없습니다</div>';
+
+  document.getElementById('memoInput').style.display = 'none';
+  document.querySelector('.modal-actions').style.display = 'none';
+  document.getElementById('dayOverlay').classList.add('show');
 }
 
 // ━━━ 날짜 모달 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1000,6 +1105,10 @@ function saveDuty() {
 function closeDayModal(e) {
   if (e && e.target !== document.getElementById('dayOverlay')) return;
   document.getElementById('dayOverlay').classList.remove('show');
+  // ALL 모달에서 숨긴 요소 복원
+  document.getElementById('memoInput').style.display = '';
+  document.querySelector('.modal-actions').style.display = '';
+  document.getElementById('dutyGrid').style.gridTemplateColumns = 'repeat(4,1fr)';
 }
 
 // ━━━ 탭 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1085,7 +1194,7 @@ function renderTodayPanel() {
     body.innerHTML += `
       <div class="list-item" style="${wk===key?'border-color:var(--accent)':''}">
         <div class="li-date">${DAYS_KR[i]} ${pad(dd.getMonth()+1)}/${pad(dd.getDate())}</div>
-        ${wt ? `<div class="li-badge" style="background:${wt.color}22;color:${wt.color}">${wt.emoji} ${wt.label}</div>` : '<div class="li-badge" style="background:var(--surface2);color:var(--muted)">—</div>'}
+        ${wt ? `<div class="li-badge" style="background:${wt.color}22;color:${wt.color}">${wt.emoji} ${wt.label}</div>` : '<div class="li-badge" style="background:var(--surface2);color:var(--muted)">-</div>'}
         <div class="li-memo">${we?.memo || ''}</div>
       </div>`;
   }
