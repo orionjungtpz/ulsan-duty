@@ -297,6 +297,13 @@ header {
 .day-cell.sun .day-num { color: #ef4444; }
 .day-cell.sat .day-num { color: #60a5fa; }
 .day-cell.today.sun .day-num, .day-cell.today.sat .day-num { color: #fff; }
+.day-cell.holiday .day-num { color: #ef4444; }
+.holiday-label {
+  font-size: 7px; color: #ef4444; font-weight: 700;
+  width: 100%; text-align: center;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  line-height: 1.2;
+}
 
 .day-num { font-size: 11px; font-weight: 700; font-family: 'Space Mono', monospace; line-height: 1; }
 .duty-badge {
@@ -783,7 +790,8 @@ let currentYear, currentMonth;
 let activeMemberId   = 'ALL';
 let allData          = {};
 let photos           = {};
-let customDutyTypes  = {}; // 멤버별 커스텀 근무유형 { memberId: [{id,label,sub,emoji,color},...] }
+let customDutyTypes  = {};
+let holidays         = {}; // { 'YYYY-MM-DD': '공휴일명' }
 let selectedDutyType = null;
 let editingDate      = null;
 let photoTargetId    = null;
@@ -825,6 +833,46 @@ function getAllDutyTypes(memberId) {
   const base   = getMemberDutyTypes(memberId);
   const custom = (customDutyTypes[memberId] || []);
   return [...base, ...custom];
+}
+
+// ━━━ 공휴일 API ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const HOLIDAY_API_KEY = '9c63fe27da45656e1b223d173b18d5997daac23cc3f9aacd53e27400a8a030a0';
+
+async function fetchHolidays(year, month) {
+  const cacheKey = `holiday_${year}_${pad(month)}`;
+  // 캐시 확인
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) {
+    const parsed = JSON.parse(cached);
+    Object.assign(holidays, parsed);
+    return;
+  }
+
+  try {
+    const url = `https://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo` +
+      `?serviceKey=${HOLIDAY_API_KEY}&solYear=${year}&solMonth=${pad(month)}&_type=json&numOfRows=50`;
+    const res  = await fetch(url);
+    const json = await res.json();
+    const items = json?.response?.body?.items?.item;
+    if (!items) return;
+
+    const list = Array.isArray(items) ? items : [items];
+    const monthly = {};
+    list.forEach(item => {
+      const dateStr = String(item.locdate);
+      const key = `${dateStr.slice(0,4)}-${dateStr.slice(4,6)}-${dateStr.slice(6,8)}`;
+      holidays[key] = item.dateName;
+      monthly[key]  = item.dateName;
+    });
+    localStorage.setItem(cacheKey, JSON.stringify(monthly));
+  } catch(e) {
+    console.warn('공휴일 API 오류:', e);
+  }
+}
+
+async function loadHolidaysForMonth(year, month) {
+  await fetchHolidays(year, month);
+  renderCalendar();
 }
 
 // ━━━ 스플래시 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -872,6 +920,8 @@ function renderCalendar() {
   const grid = document.getElementById('calGrid');
   grid.innerHTML = '';
   document.getElementById('monthTitle').textContent = `${currentYear}.${pad(currentMonth)}`;
+  // 공휴일 로드 (캐시 없으면 fetch)
+  loadHolidaysForMonth(currentYear, currentMonth);
 
   const firstDay = new Date(currentYear, currentMonth - 1, 1).getDay();
   const lastDate = new Date(currentYear, currentMonth, 0).getDate();
@@ -898,13 +948,22 @@ function renderCalendar() {
     const key     = dateKey(y, m, d);
     const entry   = data[key];
 
+    const isHoliday = !other && holidays[key];
     const cell = document.createElement('div');
-    cell.className = ['day-cell', dow===0?'sun':'', dow===6?'sat':'', other?'other-month':'', isToday?'today':''].filter(Boolean).join(' ');
+    cell.className = ['day-cell', dow===0?'sun':'', dow===6?'sat':'', other?'other-month':'', isToday?'today':'', isHoliday?'holiday':''].filter(Boolean).join(' ');
 
     const numEl = document.createElement('div');
     numEl.className = 'day-num';
     numEl.textContent = d;
     cell.appendChild(numEl);
+
+    // 공휴일 이름 표시
+    if (isHoliday) {
+      const hlabel = document.createElement('div');
+      hlabel.className = 'holiday-label';
+      hlabel.textContent = holidays[key];
+      cell.appendChild(hlabel);
+    }
 
     if (activeMemberId === 'ALL') {
       // ALL 탭: 입력된 멤버 전체 표시
