@@ -2,8 +2,25 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>울산듀티</title>
+
+<!-- PWA 홈화면 아이콘 (splash.jpg 사용) -->
+<link rel="apple-touch-icon" href="splash.jpg">
+<link rel="apple-touch-icon" sizes="180x180" href="splash.jpg">
+<link rel="apple-touch-icon" sizes="152x152" href="splash.jpg">
+<link rel="apple-touch-icon" sizes="120x120" href="splash.jpg">
+<link rel="icon" type="image/jpeg" href="splash.jpg">
+
+<!-- iOS 앱처럼 전체화면 실행 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="울산듀티">
+
+<!-- 안드로이드 PWA -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="울산듀티">
+<meta name="theme-color" content="#0f0f13">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Space+Mono:wght@400;700&display=swap');
 
@@ -26,6 +43,12 @@ body {
   color: var(--text);
   height: 100dvh;
   position: relative;
+}
+
+#mainApp {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 /* ════════════════════════════════
@@ -624,14 +647,32 @@ const DUTY_TYPES = [
   { id:'day2',   label:'Day2',    sub:'07:00~19:00', emoji:'🌤️',  color:'#f97316' },
   { id:'day3',   label:'Day',     sub:'08:00~17:30', emoji:'🌞',  color:'#eab308' },
   { id:'day4',   label:'Day',     sub:'06:00~14:00', emoji:'🌅',  color:'#fb923c' },
+  { id:'day5',   label:'Day',     sub:'06:00~15:00', emoji:'🌄',  color:'#f59e0b' },
   { id:'eve',    label:'Evening', sub:'15:00~23:00', emoji:'🌆',  color:'#8b5cf6' },
   { id:'eve2',   label:'Evening', sub:'14:00~22:00', emoji:'🌇',  color:'#a855f7' },
   { id:'night',  label:'Night',   sub:'23:00~07:00', emoji:'🌙',  color:'#3b82f6' },
   { id:'night2', label:'Night2',  sub:'19:00~07:00', emoji:'🌃',  color:'#06b6d4' },
   { id:'night3', label:'Night',   sub:'22:00~06:00', emoji:'🌌',  color:'#6366f1' },
+  { id:'off',    label:'오프',    sub:'Off Day',     emoji:'✨',  color:'#64748b' },
   { id:'vac',    label:'휴가',    sub:'Vacation',    emoji:'🏖️',  color:'#10b981' },
   { id:'edu',    label:'교육',    sub:'Education',   emoji:'📚',  color:'#a78bfa' },
 ];
+
+// 멤버별 표시할 근무유형 세트
+const MEMBER_DUTY_SETS = {
+  'han_sh':  ['day3', 'off', 'vac', 'edu'],
+  'lee_jh':  ['day', 'day2', 'eve', 'night', 'night2', 'off', 'vac', 'edu'],
+  'park_hc': ['day2', 'night2', 'vac', 'edu'],
+  'lee_kw':  ['day4', 'eve2', 'night3', 'off', 'vac', 'edu'],
+  'han_sk':  ['day5', 'off', 'vac', 'edu'],
+  'lee_jl':  ['day4', 'eve2', 'night3', 'off', 'vac', 'edu'],
+};
+
+function getMemberDutyTypes(memberId) {
+  const set = MEMBER_DUTY_SETS[memberId];
+  if (!set) return DUTY_TYPES;
+  return set.map(id => DUTY_TYPES.find(dt => dt.id === id)).filter(Boolean);
+}
 
 const TODAY   = new Date();
 const pad     = n => String(n).padStart(2,'0');
@@ -765,7 +806,7 @@ function renderStats() {
   nc.innerHTML = `<span style="color:var(--accent);font-weight:700;font-size:11px">${mem.name}</span>`;
   bar.appendChild(nc);
 
-  DUTY_TYPES.forEach(dt => {
+  getMemberDutyTypes(activeMemberId).forEach(dt => {
     if (!counts[dt.id]) return;
     const chip = document.createElement('div');
     chip.className = 'stat-chip';
@@ -789,7 +830,8 @@ function openDayModal(y, m, d) {
 
   const grid = document.getElementById('dutyGrid');
   grid.innerHTML = '';
-  DUTY_TYPES.forEach(dt => {
+  const activeDutyTypes = getMemberDutyTypes(activeMemberId);
+  activeDutyTypes.forEach(dt => {
     const btn = document.createElement('button');
     btn.className = 'duty-btn' + (selectedDutyType === dt.id ? ' selected' : '');
     btn.style.color = dt.color;
