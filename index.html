@@ -411,6 +411,37 @@ header {
 }
 .btn-save:hover { background: #5855e8; }
 
+@keyframes avatar-pop {
+  0%   { transform: scale(0.5); opacity: 0; }
+  30%  { transform: scale(1.15); opacity: 1; }
+  70%  { transform: scale(1); opacity: 1; }
+  85%  { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.6); opacity: 0; }
+}
+#avatarPopup {
+  position: fixed; inset: 0; z-index: 900;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  pointer-events: none; opacity: 0;
+}
+#avatarPopup.show {
+  animation: avatar-pop 1.5s cubic-bezier(.36,.07,.19,.97) forwards;
+}
+#avatarPopupImg {
+  width: 200px; height: 200px; border-radius: 50%;
+  overflow: hidden; border: 4px solid var(--accent);
+  background: var(--surface2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 60px; font-weight: 900; color: var(--text);
+  box-shadow: 0 12px 60px rgba(0,0,0,.7);
+}
+#avatarPopupImg img { width: 100%; height: 100%; object-fit: cover; }
+#avatarPopupName {
+  margin-top: 12px; font-size: 18px; font-weight: 700;
+  color: #fff; letter-spacing: -0.3px;
+  text-shadow: 0 2px 8px rgba(0,0,0,.8);
+}
+
 @keyframes btn-bounce {
   0%   { transform: scale(1); }
   40%  { transform: scale(1.18); }
@@ -672,6 +703,12 @@ header {
 
 </div><!-- /mainApp -->
 
+<!-- 아바타 팝업 -->
+<div id="avatarPopup">
+  <div id="avatarPopupImg"></div>
+  <div id="avatarPopupName"></div>
+</div>
+
 <!-- 근무 입력 모달 -->
 <div class="overlay day-overlay" id="dayOverlay" onclick="closeDayModal(event)">
   <div class="modal-sheet">
@@ -914,6 +951,28 @@ function initSplash() {
 }
 
 // ━━━ 멤버 바 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function showAvatarPopup(mem) {
+  const popup   = document.getElementById('avatarPopup');
+  const imgEl   = document.getElementById('avatarPopupImg');
+  const nameEl  = document.getElementById('avatarPopupName');
+
+  if (mem === 'ALL') {
+    imgEl.innerHTML  = 'ALL';
+    imgEl.style.fontSize = '28px';
+    nameEl.textContent = '전체 보기';
+  } else {
+    const photo = photos[mem.id];
+    imgEl.innerHTML  = photo ? `<img src="${photo}">` : mem.short;
+    imgEl.style.fontSize = photo ? '' : '36px';
+    nameEl.textContent = mem.name;
+  }
+
+  popup.classList.remove('show');
+  void popup.offsetWidth;
+  popup.classList.add('show');
+  setTimeout(() => popup.classList.remove('show'), 1500);
+}
+
 function renderMemberBar() {
   const bar = document.getElementById('memberBar');
   bar.innerHTML = '';
@@ -921,7 +980,12 @@ function renderMemberBar() {
   // ALL 탭
   const allChip = document.createElement('div');
   allChip.className = 'member-chip' + (activeMemberId === 'ALL' ? ' active' : '');
-  allChip.onclick = () => { activeMemberId = 'ALL'; renderMemberBar(); renderCalendar(); };
+  allChip.onclick = () => {
+    showAvatarPopup('ALL');
+    activeMemberId = 'ALL';
+    renderCalendar();
+    setTimeout(() => renderMemberBar(), 400);
+  };
   allChip.innerHTML = `
     <div class="member-avatar" style="background:${activeMemberId==='ALL'?'var(--accent)':'var(--surface2)'};border-color:${activeMemberId==='ALL'?'var(--accent)':'var(--border)'};font-size:11px;color:#fff;font-weight:900">ALL</div>
     <div class="member-name">전체</div>`;
@@ -930,7 +994,12 @@ function renderMemberBar() {
   MEMBERS.forEach(m => {
     const chip = document.createElement('div');
     chip.className = 'member-chip' + (m.id === activeMemberId ? ' active' : '');
-    chip.onclick = () => { activeMemberId = m.id; renderMemberBar(); renderCalendar(); };
+    chip.onclick = () => {
+      showAvatarPopup(m);
+      activeMemberId = m.id;
+      renderCalendar();
+      setTimeout(() => renderMemberBar(), 400);
+    };
     const photo = photos[m.id];
     chip.innerHTML = `
       <div class="member-avatar">
