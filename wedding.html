@@ -477,7 +477,7 @@ input,textarea,select{font-family:'Noto Sans KR',sans-serif}
       <option value="text">텍스트</option>
       <option value="number">숫자 (금액/인원)</option>
       <option value="rating">별점 (1-5)</option>
-      <option value="photo">사진 (최대 3장)</option>
+      <option value="photo">사진 (최대 1장)</option>
     </select>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modal-addvenuerow')">취소</button>
@@ -1155,7 +1155,7 @@ let focusedSlot = null;
 function renderPhotoSlots(rid,cid,photo) {
   if(photo) {
     return `<div class="photo-single" id="pslot-${rid}-${cid}"
-        onclick="triggerPhotoUpload('${rid}','${cid}')"
+        onclick="focusSlot('${rid}','${cid}')"
         ondragover="event.preventDefault()"
         ondrop="handlePhotoDrop(event,'${rid}','${cid}')">
         <img src="${photo}" alt="사진">
@@ -1164,28 +1164,25 @@ function renderPhotoSlots(rid,cid,photo) {
       </div>`;
   }
   return `<div class="photo-single" id="pslot-${rid}-${cid}"
-      onclick="triggerPhotoUpload('${rid}','${cid}')"
+      onclick="focusSlot('${rid}','${cid}')"
       ondragover="event.preventDefault()"
       ondrop="handlePhotoDrop(event,'${rid}','${cid}')">
       <div class="empty-wrap">
         <span class="empty-icon">📷</span>
-        <span class="empty-hint">클릭 또는 Ctrl+V</span>
+        <span class="empty-hint">클릭 후 Ctrl+V</span>
       </div>
     </div>`;
 }
 
-function triggerPhotoUpload(rid,cid) {
+function focusSlot(rid,cid) {
   document.querySelectorAll('.photo-single').forEach(s=>s.classList.remove('focused'));
   const slot = document.getElementById(`pslot-${rid}-${cid}`);
   if(slot) slot.classList.add('focused');
   focusedSlot = {rid,cid};
-  const input = document.createElement('input');
-  input.type='file'; input.accept='image/*';
-  input.onchange = e => {
-    const file = e.target.files[0];
-    if(file) readImageFile(file, base64=>insertPhoto(rid,cid,base64));
-  };
-  input.click();
+}
+
+function triggerPhotoUpload(rid,cid) {
+  focusSlot(rid,cid);
 }
 
 function insertPhoto(rid,cid,base64) {
