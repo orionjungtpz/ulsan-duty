@@ -191,6 +191,23 @@ input,textarea,select{font-family:'Noto Sans KR',sans-serif}
 @keyframes spin{to{transform:rotate(360deg)}}
 .loading-text{font-size:14px;color:var(--text2)}
 
+/* 로그인 화면 */
+.login-screen{position:fixed;inset:0;background:var(--bg);z-index:998;display:none;flex-direction:column;align-items:center;justify-content:center;gap:0}
+.login-screen.show{display:flex}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:48px 52px;text-align:center;max-width:380px;width:90%}
+.login-logo{font-family:'Playfair Display',serif;font-size:32px;font-style:italic;color:var(--accent);margin-bottom:8px}
+.login-sub{font-size:13px;color:var(--text3);margin-bottom:36px}
+.login-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:12px 20px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--surface);color:var(--text1);font-size:14px;font-weight:500;cursor:pointer;transition:all .15s;font-family:'Noto Sans KR',sans-serif}
+.login-btn:hover{background:var(--surface2);border-color:var(--border2)}
+.login-btn img{width:20px;height:20px}
+.login-error{font-size:12px;color:var(--red);margin-top:14px;display:none}
+.login-error.show{display:block}
+.user-info{display:flex;align-items:center;gap:8px}
+.user-avatar{width:28px;height:28px;border-radius:50%;border:1px solid var(--border)}
+.user-name{font-size:12px;color:var(--text2)}
+.logout-btn{font-size:12px;color:var(--text3);background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:6px;transition:all .15s}
+.logout-btn:hover{background:var(--surface2);color:var(--red)}
+
 @media(max-width:768px){
   .layout{grid-template-columns:1fr}
   .sidebar{height:auto;position:static;flex-direction:row;overflow-x:auto;padding:8px;border-right:none;border-bottom:1px solid var(--border);flex-wrap:nowrap}
@@ -212,6 +229,19 @@ input,textarea,select{font-family:'Noto Sans KR',sans-serif}
   <div class="loading-text">Firebase 연결 중...</div>
 </div>
 
+<!-- 로그인 화면 -->
+<div class="login-screen" id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">Wedding Planner</div>
+    <div class="login-sub">신랑 · 신부 전용 플래너</div>
+    <button class="login-btn" id="google-login-btn">
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
+      Google 계정으로 로그인
+    </button>
+    <div class="login-error" id="login-error">접근 권한이 없는 계정입니다.</div>
+  </div>
+</div>
+
 <div class="layout">
 <header class="header">
   <div>
@@ -219,6 +249,11 @@ input,textarea,select{font-family:'Noto Sans KR',sans-serif}
     <div class="header-sub">결혼 준비 올인원 플래너</div>
   </div>
   <div class="hdr-right">
+    <div class="user-info" id="user-info" style="display:none">
+      <img class="user-avatar" id="user-avatar" src="" alt="">
+      <span class="user-name" id="user-name"></span>
+      <button class="logout-btn" onclick="window._logout()">로그아웃</button>
+    </div>
     <div class="sync-status" id="sync-status">
       <div class="sync-dot"></div>
       <span id="sync-label">연결 중</span>
@@ -434,7 +469,10 @@ input,textarea,select{font-family:'Noto Sans KR',sans-serif}
 <!-- Firebase SDK -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, onSnapshot, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const ALLOWED = ["orionjungtpz@gmail.com", "usun1207@gmail.com"];
 
 const firebaseConfig = {
   apiKey: "AIzaSyDxxxMvQHagh7hpmK9_uQUPhydHUHePzDw",
@@ -448,11 +486,11 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
 
-// Firestore 문서 경로: 하나의 공유 플래너
 const PLAN_DOC = doc(db, "planner", "shared");
 
-// ── 동기화 상태 UI ──
 function setSyncStatus(st, msg) {
   const el = document.getElementById('sync-status');
   const lb = document.getElementById('sync-label');
@@ -485,51 +523,84 @@ window.saveState = function() {
   }, 600);
 };
 
-// ── 최초 로드 + 실시간 수신 ──
-async function initFirebase() {
-  try {
-    setSyncStatus('syncing', '연결 중...');
-
-    // 실시간 리스너 — 다른 기기에서 바꾸면 자동 반영
-    onSnapshot(PLAN_DOC, (snap) => {
-      if (!snap.exists()) {
-        // 첫 방문: 기본값으로 초기화
-        window._state = {};
-        window._months = window.getDefaultMonths();
-        window._budgetRows = window.getDefaultBudgetRows();
-        window._timelineRows = window.getDefaultTimelineRows();
-        window._vendorRows = window.getDefaultVendorRows();
-        window._beautyRows = window.getDefaultBeautyRows();
-        window._venueData = window.getDefaultVenueData();
-      } else {
-        const d = snap.data();
-        window._state = d.state || {};
-        window._months = d.months || window.getDefaultMonths();
-        window._budgetRows = d.budgetRows || window.getDefaultBudgetRows();
-        window._timelineRows = d.timelineRows || window.getDefaultTimelineRows();
-        window._vendorRows = d.vendorRows || window.getDefaultVendorRows();
-        window._beautyRows = d.beautyRows || window.getDefaultBeautyRows();
-        window._venueData = d.venueData || window.getDefaultVenueData();
-      }
-
-      // 로딩 숨기고 전체 렌더
-      document.getElementById('loading-overlay').style.display = 'none';
-      setSyncStatus('synced', '실시간 동기화');
-      window.renderAll();
-    }, (err) => {
-      setSyncStatus('error', '연결 오류');
-      document.getElementById('loading-overlay').style.display = 'none';
-      console.error(err);
-    });
-
-  } catch(e) {
-    setSyncStatus('error', '연결 실패');
+// ── Firestore 리스너 ──
+let unsubscribe = null;
+function startListening() {
+  if (unsubscribe) unsubscribe();
+  unsubscribe = onSnapshot(PLAN_DOC, (snap) => {
+    if (!snap.exists()) {
+      window._state = {};
+      window._months = window.getDefaultMonths();
+      window._budgetRows = window.getDefaultBudgetRows();
+      window._timelineRows = window.getDefaultTimelineRows();
+      window._vendorRows = window.getDefaultVendorRows();
+      window._beautyRows = window.getDefaultBeautyRows();
+      window._venueData = window.getDefaultVenueData();
+    } else {
+      const d = snap.data();
+      window._state = d.state || {};
+      window._months = d.months || window.getDefaultMonths();
+      window._budgetRows = d.budgetRows || window.getDefaultBudgetRows();
+      window._timelineRows = d.timelineRows || window.getDefaultTimelineRows();
+      window._vendorRows = d.vendorRows || window.getDefaultVendorRows();
+      window._beautyRows = d.beautyRows || window.getDefaultBeautyRows();
+      window._venueData = d.venueData || window.getDefaultVenueData();
+    }
     document.getElementById('loading-overlay').style.display = 'none';
-    console.error(e);
-  }
+    setSyncStatus('synced', '실시간 동기화');
+    window.renderAll();
+  }, (err) => {
+    setSyncStatus('error', '연결 오류');
+    document.getElementById('loading-overlay').style.display = 'none';
+    console.error(err);
+  });
 }
 
-initFirebase();
+// ── 로그인 상태 감지 ──
+onAuthStateChanged(auth, (user) => {
+  const loginScreen = document.getElementById('login-screen');
+  const loginError = document.getElementById('login-error');
+  const userInfo = document.getElementById('user-info');
+  const loading = document.getElementById('loading-overlay');
+
+  if (user) {
+    if (!ALLOWED.includes(user.email)) {
+      // 허용되지 않은 계정 → 로그아웃 후 에러 표시
+      signOut(auth);
+      loginScreen.classList.add('show');
+      loginError.classList.add('show');
+      loading.style.display = 'none';
+      return;
+    }
+    // 허용된 계정 → 플래너 진입
+    loginScreen.classList.remove('show');
+    loginError.classList.remove('show');
+    userInfo.style.display = 'flex';
+    document.getElementById('user-avatar').src = user.photoURL || '';
+    document.getElementById('user-name').textContent = user.displayName || user.email;
+    startListening();
+  } else {
+    // 로그아웃 상태
+    if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+    loginScreen.classList.add('show');
+    userInfo.style.display = 'none';
+    loading.style.display = 'none';
+  }
+});
+
+// ── Google 로그인 ──
+document.getElementById('google-login-btn').addEventListener('click', async () => {
+  try {
+    await signInWithPopup(auth, provider);
+  } catch(e) {
+    console.error(e);
+  }
+});
+
+// ── 로그아웃 ──
+window._logout = async function() {
+  if (confirm('로그아웃 하시겠어요?')) await signOut(auth);
+};
 </script>
 
 <script>
