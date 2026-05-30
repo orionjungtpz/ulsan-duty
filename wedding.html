@@ -477,7 +477,7 @@ input,textarea,select{font-family:'Noto Sans KR',sans-serif}
       <option value="text">텍스트</option>
       <option value="number">숫자 (금액/인원)</option>
       <option value="rating">별점 (1-5)</option>
-      <option value="photo">사진 (최대 1장)</option>
+      <option value="photo">사진 (최대 3장)</option>
     </select>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modal-addvenuerow')">취소</button>
@@ -1127,9 +1127,9 @@ function renderVenue() {
       }
       if(row.type==='rating') tdHtml+=`<td${cls} style="text-align:center">${renderStars(row.id,col.id,val)}</td>`;
       else if(row.type==='photo'){
-        const photo = getPhotoCell(row.id,col.id);
+        const photos = getPhotoCell(row.id,col.id);
         tdHtml+=`<td style="padding:6px;vertical-align:top;min-width:180px">
-          <div class="photo-cell">${renderPhotoSlots(row.id,col.id,photo)}</div>
+          <div class="photo-cell">${renderPhotoSlots(row.id,col.id,photos)}</div>
         </td>`;
       }
       else if(row.name==='위치') tdHtml+=`<td${cls}>
@@ -1147,64 +1147,67 @@ function renderVenue() {
   calcVenueRecommendation();
 }
 // ── 사진 관련 ──
-function getPhotoCell(rid,cid){ return VD().cells['photo_'+rid+'_'+cid] || null; }
+function getPhotoCell(rid,cid){ return VD().cells['photo_'+rid+'_'+cid] || [null,null,null]; }
 function setPhotoCell(rid,cid,val){ VD().cells['photo_'+rid+'_'+cid]=val; saveState(); }
 
-let focusedSlot = null;
+let focusedSlot = null; // {rid,cid,idx}
 
-function renderPhotoSlots(rid,cid,photo) {
-  if(photo) {
-    return `<div class="photo-single" id="pslot-${rid}-${cid}"
-        onclick="focusSlot('${rid}','${cid}')"
-        ondragover="event.preventDefault()"
-        ondrop="handlePhotoDrop(event,'${rid}','${cid}')">
-        <img src="${photo}" alt="사진">
-        <button class="del-photo" onclick="event.stopPropagation();deletePhoto('${rid}','${cid}')">×</button>
-        <button class="zoom-btn" onclick="event.stopPropagation();openLightbox('${rid}','${cid}')">⤢</button>
-      </div>`;
-  }
-  return `<div class="photo-single" id="pslot-${rid}-${cid}"
-      onclick="focusSlot('${rid}','${cid}')"
-      ondragover="event.preventDefault()"
-      ondrop="handlePhotoDrop(event,'${rid}','${cid}')">
-      <div class="empty-wrap">
-        <span class="empty-icon">📷</span>
-        <span class="empty-hint">클릭 후 Ctrl+V</span>
-      </div>
-    </div>`;
+function renderPhotoSlots(rid,cid,photos) {
+  return `<div style="display:flex;flex-direction:column;gap:5px">` +
+    photos.map((p,i) => {
+      const sid = `pslot-${rid}-${cid}-${i}`;
+      if(p) return `<div class="photo-single" id="${sid}"
+          onclick="focusSlot('${rid}','${cid}',${i})"
+          ondragover="event.preventDefault()"
+          ondrop="handlePhotoDrop(event,'${rid}','${cid}',${i})">
+          <img src="${p}" alt="사진${i+1}">
+          <button class="del-photo" onclick="event.stopPropagation();deletePhoto('${rid}','${cid}',${i})">×</button>
+          <button class="zoom-btn" onclick="event.stopPropagation();openLightbox('${rid}','${cid}',${i})">⤢</button>
+        </div>`;
+      return `<div class="photo-single" id="${sid}"
+          onclick="focusSlot('${rid}','${cid}',${i})"
+          ondragover="event.preventDefault()"
+          ondrop="handlePhotoDrop(event,'${rid}','${cid}',${i})">
+          <div class="empty-wrap">
+            <span class="empty-icon">📷</span>
+            <span class="empty-hint">클릭 후 Ctrl+V</span>
+          </div>
+        </div>`;
+    }).join('') + `</div>`;
 }
 
-function focusSlot(rid,cid) {
+function focusSlot(rid,cid,idx) {
   document.querySelectorAll('.photo-single').forEach(s=>s.classList.remove('focused'));
-  const slot = document.getElementById(`pslot-${rid}-${cid}`);
+  const slot = document.getElementById(`pslot-${rid}-${cid}-${idx}`);
   if(slot) slot.classList.add('focused');
-  focusedSlot = {rid,cid};
+  focusedSlot = {rid,cid,idx};
 }
 
-function triggerPhotoUpload(rid,cid) {
-  focusSlot(rid,cid);
-}
-
-function insertPhoto(rid,cid,base64) {
-  setPhotoCell(rid,cid,base64);
-  const slot = document.getElementById(`pslot-${rid}-${cid}`);
+function insertPhoto(rid,cid,idx,base64) {
+  const photos = getPhotoCell(rid,cid);
+  photos[idx] = base64;
+  setPhotoCell(rid,cid,photos);
+  const slot = document.getElementById(`pslot-${rid}-${cid}-${idx}`);
   if(slot) {
     slot.classList.remove('focused');
     slot.innerHTML = `<img src="${base64}" alt="사진">
-      <button class="del-photo" onclick="event.stopPropagation();deletePhoto('${rid}','${cid}')">×</button>
-      <button class="zoom-btn" onclick="event.stopPropagation();openLightbox('${rid}','${cid}')">⤢</button>`;
+      <button class="del-photo" onclick="event.stopPropagation();deletePhoto('${rid}','${cid}',${idx})">×</button>
+      <button class="zoom-btn" onclick="event.stopPropagation();openLightbox('${rid}','${cid}',${idx})">⤢</button>`;
   }
   focusedSlot = null;
 }
 
-function deletePhoto(rid,cid) {
-  setPhotoCell(rid,cid,null);
-  const slot = document.getElementById(`pslot-${rid}-${cid}`);
-  if(slot) slot.innerHTML = `<div class="empty-wrap"><span class="empty-icon">📷</span><span class="empty-hint">클릭 또는 Ctrl+V</span></div>`;
+function deletePhoto(rid,cid,idx) {
+  const photos = getPhotoCell(rid,cid);
+  photos[idx] = null;
+  setPhotoCell(rid,cid,photos);
+  const slot = document.getElementById(`pslot-${rid}-${cid}-${idx}`);
+  if(slot) slot.innerHTML = `<div class="empty-wrap"><span class="empty-icon">📷</span><span class="empty-hint">클릭 후 Ctrl+V</span></div>`;
 }
 
-function openLightbox(rid,cid) {
-  const photo = getPhotoCell(rid,cid);
+function openLightbox(rid,cid,idx) {
+  const photos = getPhotoCell(rid,cid);
+  const photo = photos[idx];
   if(!photo) return;
   document.getElementById('lightbox-img').src = photo;
   document.getElementById('lightbox').classList.add('open');
@@ -1215,11 +1218,11 @@ function closeLightbox() {
 }
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeLightbox(); });
 
-function handlePhotoDrop(e,rid,cid) {
+function handlePhotoDrop(e,rid,cid,idx) {
   e.preventDefault();
   const file = e.dataTransfer.files[0];
   if(!file||!file.type.startsWith('image/')) return;
-  readImageFile(file, base64=>insertPhoto(rid,cid,base64));
+  readImageFile(file, base64=>insertPhoto(rid,cid,idx,base64));
 }
 
 function readImageFile(file,cb) {
@@ -1247,15 +1250,18 @@ document.addEventListener('paste', e => {
     if(!item.type.startsWith('image/')) continue;
     const file = item.getAsFile();
     if(focusedSlot) {
-      readImageFile(file, base64=>insertPhoto(focusedSlot.rid,focusedSlot.cid,base64));
+      readImageFile(file, base64=>insertPhoto(focusedSlot.rid,focusedSlot.cid,focusedSlot.idx,base64));
     } else {
+      // 포커스 없으면 첫 번째 빈 슬롯에 삽입
       let done=false;
       for(const row of VD().rows) {
         if(row.type!=='photo'||done) continue;
         for(const col of VD().cols) {
           if(done) break;
-          if(!getPhotoCell(row.id,col.id)) {
-            readImageFile(file, base64=>insertPhoto(row.id,col.id,base64));
+          const photos = getPhotoCell(row.id,col.id);
+          const emptyIdx = photos.findIndex(p=>!p);
+          if(emptyIdx!==-1) {
+            readImageFile(file, base64=>insertPhoto(row.id,col.id,emptyIdx,base64));
             done=true;
           }
         }
