@@ -185,6 +185,18 @@ input,textarea,select{font-family:'Noto Sans KR',sans-serif}
 .venue-del-btn:hover{color:var(--red)}
 .recommend-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 10px;border-radius:20px;background:var(--accent);color:#fff;font-weight:500}
 
+/* 사진 업로드 */
+.photo-cell{display:flex;flex-direction:column;gap:8px;padding:6px 0;min-width:200px}
+.photo-slots{display:flex;gap:8px;flex-wrap:wrap}
+.photo-slot{position:relative;width:80px;height:80px;border-radius:var(--radius);border:1.5px dashed var(--border2);overflow:hidden;flex-shrink:0;background:var(--surface2);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:border-color .15s}
+.photo-slot:hover{border-color:var(--accent)}
+.photo-slot img{width:100%;height:100%;object-fit:cover;display:block}
+.photo-slot .empty-icon{font-size:22px;color:var(--text3)}
+.photo-slot .del-photo{position:absolute;top:3px;right:3px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;border:none;font-size:12px;cursor:pointer;display:none;align-items:center;justify-content:center;line-height:1}
+.photo-slot:hover .del-photo{display:flex}
+.photo-paste-hint{font-size:11px;color:var(--text3)}
+.photo-input{display:none}
+
 /* 로딩 오버레이 */
 .loading-overlay{position:fixed;inset:0;background:rgba(250,249,247,.92);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
 .loading-spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
@@ -800,6 +812,7 @@ window.getDefaultVenueData = function() {
       {id:'vr10',name:'서비스 친절도',type:'rating'},
       {id:'vr11',name:'음식 맛',type:'rating'},
       {id:'vr12',name:'특이사항',type:'text'},
+      {id:'vr13',name:'사진',type:'photo'},
     ],
     cells:{}
   };
@@ -1103,6 +1116,17 @@ function renderVenue() {
         }
       }
       if(row.type==='rating') tdHtml+=`<td${cls} style="text-align:center">${renderStars(row.id,col.id,val)}</td>`;
+      else if(row.type==='photo'){
+        const photos = getPhotoCell(row.id,col.id);
+        tdHtml+=`<td style="vertical-align:top;padding:8px 12px">
+          <div class="photo-cell">
+            <div class="photo-slots" id="pslots-${row.id}-${col.id}">
+              ${renderPhotoSlots(row.id,col.id,photos)}
+            </div>
+            <div class="photo-paste-hint">📋 Ctrl+V 붙여넣기 또는 슬롯 클릭</div>
+          </div>
+        </td>`;
+      }
       else if(row.name==='위치') tdHtml+=`<td${cls}>
         <div style="display:flex;align-items:center;gap:6px">
           <input class="venue-td-input" value="${val}" placeholder="주소 입력" oninput="setCell('${row.id}','${col.id}',this.value);renderVenue()" style="flex:1">
@@ -1117,6 +1141,115 @@ function renderVenue() {
   table.appendChild(tbody);
   calcVenueRecommendation();
 }
+// ── 사진 관련 ──
+function getPhotoCell(rid,cid){ return VD().cells['photo_'+rid+'_'+cid] || [null,null,null]; }
+function setPhotoCell(rid,cid,photos){ VD().cells['photo_'+rid+'_'+cid]=photos; saveState(); }
+
+function renderPhotoSlots(rid,cid,photos) {
+  return photos.map((p,i)=>`
+    <div class="photo-slot" id="pslot-${rid}-${cid}-${i}"
+      onclick="triggerPhotoUpload('${rid}','${cid}',${i})"
+      ondragover="event.preventDefault()"
+      ondrop="handlePhotoDrop(event,'${rid}','${cid}',${i})">
+      ${p ? `<img src="${p}" alt="사진${i+1}">
+        <button class="del-photo" onclick="event.stopPropagation();deletePhoto('${rid}','${cid}',${i})">×</button>` :
+        `<span class="empty-icon">${['🏛️','💒','🍽️'][i]}</span>`}
+    </div>`).join('');
+}
+
+function triggerPhotoUpload(rid,cid,idx) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    readImageFile(file, base64 => {
+      const photos = getPhotoCell(rid,cid);
+      photos[idx] = base64;
+      setPhotoCell(rid,cid,photos);
+      const slot = document.getElementById(`pslot-${rid}-${cid}-${idx}`);
+      if (slot) slot.innerHTML = `<img src="${base64}" alt="사진"><button class="del-photo" onclick="event.stopPropagation();deletePhoto('${rid}','${cid}',${idx})">×</button>`;
+    });
+  };
+  input.click();
+}
+
+function handlePhotoDrop(e,rid,cid,idx) {
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  if (!file || !file.type.startsWith('image/')) return;
+  readImageFile(file, base64 => {
+    const photos = getPhotoCell(rid,cid);
+    photos[idx] = base64;
+    setPhotoCell(rid,cid,photos);
+    const slot = document.getElementById(`pslot-${rid}-${cid}-${idx}`);
+    if (slot) slot.innerHTML = `<img src="${base64}" alt="사진"><button class="del-photo" onclick="event.stopPropagation();deletePhoto('${rid}','${cid}',${idx})">×</button>`;
+  });
+}
+
+function deletePhoto(rid,cid,idx) {
+  const photos = getPhotoCell(rid,cid);
+  photos[idx] = null;
+  setPhotoCell(rid,cid,photos);
+  const slot = document.getElementById(`pslot-${rid}-${cid}-${idx}`);
+  if(slot) slot.innerHTML = `<span class="empty-icon">${['🏛️','💒','🍽️'][idx]}</span>`;
+}
+
+function readImageFile(file, cb) {
+  const reader = new FileReader();
+  // 이미지 리사이즈 (최대 800px, 품질 0.7로 압축)
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 800;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      cb(canvas.toDataURL('image/jpeg', 0.7));
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// Ctrl+V 붙여넣기 — 예식장 탭 활성화 시 동작
+let pasteTargetRid = null, pasteTargetCid = null, pasteTargetIdx = 0;
+document.addEventListener('paste', e => {
+  if (!document.getElementById('tab-venue').classList.contains('active')) return;
+  const items = e.clipboardData.items;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      const file = item.getAsFile();
+      // 빈 슬롯 중 첫 번째에 자동 삽입
+      let inserted = false;
+      VD().rows.forEach(row => {
+        if (row.type !== 'photo' || inserted) return;
+        VD().cols.forEach(col => {
+          if (inserted) return;
+          const photos = getPhotoCell(row.id, col.id);
+          const emptyIdx = photos.findIndex(p => !p);
+          if (emptyIdx !== -1) {
+            readImageFile(file, base64 => {
+              photos[emptyIdx] = base64;
+              setPhotoCell(row.id, col.id, photos);
+              const slot = document.getElementById(`pslot-${row.id}-${col.id}-${emptyIdx}`);
+              if(slot) slot.innerHTML = `<img src="${base64}" alt="사진"><button class="del-photo" onclick="event.stopPropagation();deletePhoto('${row.id}','${col.id}',${emptyIdx})">×</button>`;
+            });
+            inserted = true;
+          }
+        });
+      });
+      break;
+    }
+  }
+});
+
 function calcVenueRecommendation() {
   const div=document.getElementById('venue-recommendation');
   if(!VD().cols.length){div.innerHTML='';return;}
