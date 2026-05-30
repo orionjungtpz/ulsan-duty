@@ -186,8 +186,8 @@ input,textarea,select{font-family:'Noto Sans KR',sans-serif}
 .recommend-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 10px;border-radius:20px;background:var(--accent);color:#fff;font-weight:500}
 
 /* 사진 업로드 */
-.photo-cell{width:100%;padding:4px 0}
-.photo-single{position:relative;width:100%;aspect-ratio:16/10;border-radius:var(--radius);border:1.5px dashed var(--border2);overflow:hidden;background:var(--surface2);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:border-color .15s}
+.photo-cell{width:100%;height:100%}
+.photo-single{position:relative;width:100%;height:120px;border-radius:var(--radius);border:1.5px dashed var(--border2);overflow:hidden;background:var(--surface2);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:border-color .15s}
 .photo-single:hover{border-color:var(--accent)}
 .photo-single.focused{border-color:var(--accent);border-style:solid;box-shadow:0 0 0 3px var(--accent-light)}
 .photo-single img{width:100%;height:100%;object-fit:cover;display:block}
@@ -1127,14 +1127,9 @@ function renderVenue() {
       }
       if(row.type==='rating') tdHtml+=`<td${cls} style="text-align:center">${renderStars(row.id,col.id,val)}</td>`;
       else if(row.type==='photo'){
-        const photos = getPhotoCell(row.id,col.id);
-        tdHtml+=`<td style="vertical-align:top;padding:8px 12px">
-          <div class="photo-cell">
-            <div class="photo-slots" id="pslots-${row.id}-${col.id}">
-              ${renderPhotoSlots(row.id,col.id,photos)}
-            </div>
-            <div class="photo-paste-hint">📋 Ctrl+V 붙여넣기 또는 슬롯 클릭</div>
-          </div>
+        const photo = getPhotoCell(row.id,col.id);
+        tdHtml+=`<td style="padding:6px;vertical-align:top;min-width:180px">
+          <div class="photo-cell">${renderPhotoSlots(row.id,col.id,photo)}</div>
         </td>`;
       }
       else if(row.name==='위치') tdHtml+=`<td${cls}>
@@ -1345,6 +1340,12 @@ function renderBeauty() {
   document.getElementById('nb-bty').textContent=total?Math.round(done/total*100)+'%':'0%';
 }
 </script>
+<!-- 라이트박스 -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="closeLightbox()">×</button>
+  <img id="lightbox-img" src="" alt="">
+</div>
+
 <!-- 라이트박스 -->
 <div class="lightbox" id="lightbox" onclick="closeLightbox()">
   <button class="lightbox-close" onclick="closeLightbox()">×</button>
