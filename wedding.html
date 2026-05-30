@@ -1032,6 +1032,12 @@ function renderVenue() {
         }
       }
       if(row.type==='rating') tdHtml+=`<td${cls} style="text-align:center">${renderStars(row.id,col.id,val)}</td>`;
+      else if(row.name==='위치') tdHtml+=`<td${cls}>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input class="venue-td-input" value="${val}" placeholder="주소 입력" oninput="setCell('${row.id}','${col.id}',this.value);renderVenue()" style="flex:1">
+          ${val ? `<a href="https://map.naver.com/search?query=${encodeURIComponent(val)}" target="_blank" style="font-size:11px;color:var(--accent);white-space:nowrap;text-decoration:none;padding:2px 7px;border:1px solid var(--accent-light);border-radius:20px;background:var(--accent-light)" title="네이버 지도에서 보기">지도 🗺️</a>` : ''}
+        </div>
+      </td>`;
       else tdHtml+=`<td${cls}><input class="venue-td-input${row.type==='number'?' num':''}" value="${val}" placeholder="${row.type==='number'?'0':'입력'}" oninput="setCell('${row.id}','${col.id}',this.value)"></td>`;
     });
     tr.innerHTML=tdHtml;
